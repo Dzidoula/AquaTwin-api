@@ -5,10 +5,8 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from . import models, schemas
-from .database import Base, engine, get_db
+from .database import get_db
 from .mock_engine import season_history, today_recommendation
-
-Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="AquaTwin-Drip Mock API")
 

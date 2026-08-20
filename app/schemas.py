@@ -83,3 +83,18 @@ class FarmerFieldSummaryOut(BaseModel):
     crop: str
     size_hectares: float
     needs_attention: bool
+
+
+class RecommendationJobOut(BaseModel):
+    id: str
+    field_id: str
+    status: str
+    created_at: str
+    finished_at: str | None = None
+    result: dict | None = None
+    error: str | None = None
+
+
+class RunJobResponse(BaseModel):
+    job_id: str
+    status: str

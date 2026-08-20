@@ -1,16 +1,25 @@
+import asyncio
+import os
 import secrets
-from datetime import date
+from datetime import date, datetime, timezone
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from . import models, schemas
 from .database import get_db
+from .engine_runner import EngineRunError, run_engine
 from .mock_engine import season_history, today_recommendation
 
 app = FastAPI(title="AquaTwin-Drip Mock API")
 
 MOCK_OTP_CODE = "1234"
+
+# The event loop only holds a weak reference to tasks created via
+# asyncio.create_task; an un-retained task may be garbage collected before
+# it completes. Since _execute_job can run for up to 30 minutes, we keep a
+# strong reference here until the task finishes.
+_background_tasks: set[asyncio.Task] = set()
 
 
 def _role_for_phone(phone: str) -> str:
@@ -243,3 +252,110 @@ def create_assisted_farmer(
     db.commit()
     db.refresh(farmer)
     return schemas.AssistedFarmerOut(id=farmer.id, phone=farmer.phone, name=farmer.name, token=farmer.token)
+
+
+def _engine_config() -> tuple[str, str]:
+    octave_cmd = os.environ.get("ENGINE_OCTAVE_CMD", "octave")
+    script_path = os.environ.get("ENGINE_SCRIPT_PATH", "run_recommendation.m")
+    return octave_cmd, script_path
+
+
+async def _execute_job(job_id: str, field_id: str) -> None:
+    from .database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        job = db.query(models.RecommendationJobModel).filter_by(id=job_id).first()
+        field = db.query(models.FieldModel).filter_by(id=field_id).first()
+        if job is None or field is None:
+            return
+        job.status = "running"
+        db.commit()
+
+        octave_cmd, script_path = _engine_config()
+        params = {
+            "culture": field.crop,
+            "lat": field.latitude,
+            "lon": field.longitude,
+            "jour_julien": field.engine_last_julian_day or date.today().timetuple().tm_yday,
+            "psi_old": field.engine_psi_state,
+            "theta_infiltre": field.engine_theta_infiltre,
+        }
+        try:
+            result = await run_engine(params, octave_cmd=octave_cmd, script_path=script_path)
+        except EngineRunError as exc:
+            job.status = "failed"
+            job.error = exc.message
+            job.finished_at = datetime.now(timezone.utc)
+            db.commit()
+            return
+
+        try:
+            job.result = {
+                "should_irrigate": result["should_irrigate"],
+                "duration_s": result["duration_s"],
+                "volume": result["volume"],
+                "soil_moisture": result["soil_moisture"],
+                "severe_stress": result["severe_stress"],
+            }
+            field.engine_psi_state = result.get("psi_old")
+            field.engine_theta_infiltre = result.get("theta_infiltre", field.engine_theta_infiltre)
+            field.engine_last_julian_day = result.get("jour_julien", field.engine_last_julian_day)
+            job.status = "done"
+            job.finished_at = datetime.now(timezone.utc)
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            job.status = "failed"
+            job.error = f"Résultat du moteur invalide: {exc}"
+            job.finished_at = datetime.now(timezone.utc)
+            db.commit()
+            return
+    finally:
+        db.close()
+
+
+@app.post("/fields/{field_id}/recommendation/run", response_model=schemas.RunJobResponse, status_code=202)
+async def run_recommendation_job(
+    field_id: str,
+    current_user: models.UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    field = _field_or_404(field_id, db)
+    _require_field_access(field, current_user)
+
+    job = models.RecommendationJobModel(field_id=field_id, status="pending")
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    task = asyncio.create_task(_execute_job(job.id, field_id))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+    return schemas.RunJobResponse(job_id=job.id, status=job.status)
+
+
+@app.get("/fields/{field_id}/recommendation/jobs/{job_id}", response_model=schemas.RecommendationJobOut)
+def get_recommendation_job(
+    field_id: str,
+    job_id: str,
+    current_user: models.UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    field = _field_or_404(field_id, db)
+    _require_field_access(field, current_user)
+
+    job = db.query(models.RecommendationJobModel).filter_by(id=job_id, field_id=field_id).first()
+    if job is None:
+        raise HTTPException(status_code=404, detail="Calcul introuvable")
+
+    return schemas.RecommendationJobOut(
+        id=job.id,
+        field_id=job.field_id,
+        status=job.status,
+        created_at=job.created_at.isoformat(),
+        finished_at=job.finished_at.isoformat() if job.finished_at else None,
+        result=job.result,
+        error=job.error,
+    )

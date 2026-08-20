@@ -99,6 +99,59 @@ def update_me(
     )
 
 
+def _latest_done_job(field_id: str, db: Session) -> models.RecommendationJobModel | None:
+    return (
+        db.query(models.RecommendationJobModel)
+        .filter_by(field_id=field_id, status="done")
+        .order_by(models.RecommendationJobModel.finished_at.desc())
+        .first()
+    )
+
+
+def _engine_explanation(result: dict) -> str:
+    moisture_pct = float(result.get("soil_moisture", 0) or 0) * 100
+    if result.get("severe_stress"):
+        return (
+            f"Humidité du sol à {moisture_pct:.0f}% (moteur physique) : stress "
+            "hydrique sévère détecté, arrosage recommandé sans délai."
+        )
+    if result.get("should_irrigate"):
+        duration_min = round((result.get("duration_s", 0) or 0) / 60)
+        volume = float(result.get("volume", 0) or 0)
+        return (
+            f"Humidité du sol à {moisture_pct:.0f}% (moteur physique) : un "
+            f"arrosage de {duration_min} min ({volume:.0f} L) est recommandé aujourd'hui."
+        )
+    return f"Humidité du sol à {moisture_pct:.0f}% (moteur physique) : pas d'arrosage nécessaire aujourd'hui."
+
+
+def _job_result_to_recommendation(job: models.RecommendationJobModel) -> dict:
+    result = job.result
+    # The engine reports soil moisture as a volumetric fraction (theta,
+    # typically 0-0.5) and duration in seconds; the API/app contract expects
+    # a 0-100 percent and minutes. Straight unit conversion, not a change to
+    # the physical model.
+    return {
+        "date": job.finished_at.date().isoformat(),
+        "should_irrigate": bool(result.get("should_irrigate", False)),
+        "duration_minutes": round((result.get("duration_s", 0) or 0) / 60),
+        "volume_liters": round(float(result.get("volume", 0) or 0), 1),
+        "severe_stress_alert": bool(result.get("severe_stress", False)),
+        "soil_moisture_percent": round(float(result.get("soil_moisture", 0) or 0) * 100, 1),
+        "explanation": _engine_explanation(result),
+    }
+
+
+def _current_recommendation(field_id: str, db: Session) -> dict:
+    """Prefers the latest completed real-engine run for this field; falls
+    back to the deterministic mock only if the engine has never completed
+    successfully for it yet."""
+    job = _latest_done_job(field_id, db)
+    if job is not None and job.result is not None:
+        return _job_result_to_recommendation(job)
+    return today_recommendation(field_id, date.today())
+
+
 def _field_or_404(field_id: str, db: Session) -> models.FieldModel:
     field = db.query(models.FieldModel).filter_by(id=field_id).first()
     if field is None:
@@ -181,7 +234,7 @@ def get_recommendation(
 ):
     field = _field_or_404(field_id, db)
     _require_field_access(field, current_user)
-    return today_recommendation(field_id, date.today())
+    return _current_recommendation(field_id, db)
 
 
 @app.get("/fields/{field_id}/history", response_model=list[schemas.HistoryPointOut])
@@ -192,7 +245,31 @@ def get_history(
 ):
     field = _field_or_404(field_id, db)
     _require_field_access(field, current_user)
-    return season_history(field_id, date.today())
+
+    mock_points = season_history(field_id, date.today())
+
+    # Overlay any day where the real engine actually completed a run for
+    # this field on top of the mock series, so days that were genuinely
+    # computed stop showing fabricated numbers.
+    done_jobs = (
+        db.query(models.RecommendationJobModel)
+        .filter_by(field_id=field_id, status="done")
+        .order_by(models.RecommendationJobModel.finished_at.asc())
+        .all()
+    )
+    real_points_by_date = {}
+    for job in done_jobs:
+        if job.result is None or job.finished_at is None:
+            continue
+        reco = _job_result_to_recommendation(job)
+        real_points_by_date[reco["date"]] = {
+            "date": reco["date"],
+            "water_used_liters": reco["volume_liters"],
+            "soil_moisture_percent": reco["soil_moisture_percent"],
+            "severe_stress_alert": reco["severe_stress_alert"],
+        }
+
+    return [real_points_by_date.get(point["date"], point) for point in mock_points]
 
 
 @app.get("/cooperative/fields", response_model=list[schemas.FarmerFieldSummaryOut])
@@ -210,7 +287,7 @@ def list_managed_fields(
     )
     summaries = []
     for field in fields:
-        reco = today_recommendation(field.id, date.today())
+        reco = _current_recommendation(field.id, db)
         summaries.append(
             schemas.FarmerFieldSummaryOut(
                 field_id=field.id,

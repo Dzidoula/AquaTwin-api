@@ -63,3 +63,49 @@ def test_poll_unknown_job_is_404(client):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 404
+
+
+def test_recommendation_uses_latest_completed_engine_run(client, monkeypatch):
+    monkeypatch.setenv("ENGINE_OCTAVE_CMD", FAKE_OCTAVE)
+    monkeypatch.setenv("ENGINE_SCRIPT_PATH", "unused-by-fake")
+
+    token = _login(client, phone="+22990000012")
+    field_id = _make_field(client, token)
+
+    run_resp = client.post(
+        f"/fields/{field_id}/recommendation/run",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    job_id = run_resp.json()["job_id"]
+
+    for _ in range(50):
+        poll = client.get(
+            f"/fields/{field_id}/recommendation/jobs/{job_id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        if poll.json()["status"] == "done":
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError("engine job never completed")
+
+    reco = client.get(
+        f"/fields/{field_id}/recommendation",
+        headers={"Authorization": f"Bearer {token}"},
+    ).json()
+
+    # fake_octave.sh's canned result: soil_moisture=0.31, duration_s=131.79,
+    # volume=0.0, should_irrigate=true, severe_stress=false.
+    assert reco["should_irrigate"] is True
+    assert reco["severe_stress_alert"] is False
+    assert reco["soil_moisture_percent"] == 31.0
+    assert reco["duration_minutes"] == round(131.79 / 60)
+    assert "moteur physique" in reco["explanation"]
+
+    history = client.get(
+        f"/fields/{field_id}/history",
+        headers={"Authorization": f"Bearer {token}"},
+    ).json()
+    todays_point = next(p for p in history if p["date"] == reco["date"])
+    assert todays_point["soil_moisture_percent"] == 31.0
+    assert todays_point["severe_stress_alert"] is False

@@ -368,6 +368,21 @@ async def _execute_job(job_id: str, field_id: str) -> None:
             return
 
         try:
+            # The engine can return a technically-valid JSON response (exit
+            # code 0) where a numeric field is nonetheless `null` — e.g. a
+            # NaN from a known unresolved unit-conversion issue in
+            # dailyIrrigationRecommendation.m (see its comments). Treat that
+            # as a failed run instead of silently persisting a "done" job
+            # with missing data — the app must never show a incomplete
+            # result as if it were a real recommendation.
+            missing = [
+                key
+                for key in ("should_irrigate", "duration_s", "volume", "soil_moisture", "severe_stress")
+                if result.get(key) is None
+            ]
+            if missing:
+                raise ValueError(f"Champs manquants dans le resultat du moteur: {', '.join(missing)}")
+
             job.result = {
                 "should_irrigate": result["should_irrigate"],
                 "duration_s": result["duration_s"],

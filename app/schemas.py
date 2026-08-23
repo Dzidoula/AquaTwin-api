@@ -98,3 +98,19 @@ class RecommendationJobOut(BaseModel):
 class RunJobResponse(BaseModel):
     job_id: str
     status: str
+
+
+class SeasonSimulationIn(BaseModel):
+    irrigation_coverage: float
+
+
+class SeasonPointOut(BaseModel):
+    day: int
+    biomass: float
+    rendement: float
+
+
+class SeasonSimulationOut(BaseModel):
+    points: list[SeasonPointOut]
+    final_rendement: float
+    appreciation: str

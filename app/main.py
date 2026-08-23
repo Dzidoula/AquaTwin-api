@@ -337,6 +337,36 @@ def _engine_config() -> tuple[str, str]:
     return octave_cmd, script_path
 
 
+def _season_engine_config() -> tuple[str, str]:
+    octave_cmd = os.environ.get("ENGINE_OCTAVE_CMD", "octave")
+    script_path = os.environ.get("SEASON_SCRIPT_PATH", "run_season_prediction.m")
+    return octave_cmd, script_path
+
+
+@app.post("/fields/{field_id}/season-simulation", response_model=schemas.SeasonSimulationOut)
+async def simulate_season(
+    field_id: str,
+    payload: schemas.SeasonSimulationIn,
+    current_user: models.UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    field = _field_or_404(field_id, db)
+    _require_field_access(field, current_user)
+
+    octave_cmd, script_path = _season_engine_config()
+    params = {"culture": field.crop, "irrigation_coverage": payload.irrigation_coverage}
+    try:
+        result = await run_engine(params, octave_cmd=octave_cmd, script_path=script_path)
+    except EngineRunError as exc:
+        raise HTTPException(status_code=502, detail=exc.message)
+
+    return schemas.SeasonSimulationOut(
+        points=[schemas.SeasonPointOut(**p) for p in result["points"]],
+        final_rendement=result["final_rendement"],
+        appreciation=result["appreciation"],
+    )
+
+
 async def _execute_job(job_id: str, field_id: str) -> None:
     from .database import SessionLocal
 

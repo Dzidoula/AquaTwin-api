@@ -5,7 +5,7 @@ import stat
 
 import pytest
 
-from app.engine_runner import run_engine, EngineRunError
+from app.engine_runner import run_engine, EngineRunError, ENGINE_LOCK, SEASON_LOCK
 
 
 FAKE_OCTAVE = os.path.join(os.path.dirname(__file__), "fixtures", "fake_octave.sh")
@@ -54,3 +54,26 @@ async def test_run_engine_serializes_concurrent_calls():
         ),
     )
     assert len(results) == 2
+
+
+@pytest.mark.asyncio
+async def test_season_lock_is_independent_of_the_recommendation_engine_lock():
+    # A long-running recommendation job (holding ENGINE_LOCK) must never
+    # block a season-simulation call — they run unrelated scripts with no
+    # shared state. Regression test for the bug where both used the same
+    # lock and a slow/stuck daily job froze the Predictions tab for
+    # everyone until it finished (up to 30 min).
+    await ENGINE_LOCK.acquire()
+    try:
+        result = await asyncio.wait_for(
+            run_engine(
+                params={"culture": "mais", "irrigation_coverage": 0.7},
+                octave_cmd=FAKE_OCTAVE,
+                script_path="unused-by-fake",
+                lock=SEASON_LOCK,
+            ),
+            timeout=2,
+        )
+        assert result["should_irrigate"] is True
+    finally:
+        ENGINE_LOCK.release()

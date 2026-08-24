@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from . import models, schemas
 from .database import get_db
-from .engine_runner import EngineRunError, run_engine
+from .engine_runner import SEASON_LOCK, EngineRunError, run_engine
 from .jobs import execute_job
 
 app = FastAPI(title="AquaTwin-Drip Mock API")
@@ -354,7 +354,7 @@ async def simulate_season(
     octave_cmd, script_path = _season_engine_config()
     params = {"culture": field.crop, "irrigation_coverage": payload.irrigation_coverage}
     try:
-        result = await run_engine(params, octave_cmd=octave_cmd, script_path=script_path)
+        result = await run_engine(params, octave_cmd=octave_cmd, script_path=script_path, lock=SEASON_LOCK)
     except EngineRunError as exc:
         raise HTTPException(status_code=502, detail=exc.message)
 

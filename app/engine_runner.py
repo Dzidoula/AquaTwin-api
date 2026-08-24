@@ -3,7 +3,15 @@ import json
 import tempfile
 from pathlib import Path
 
+# Two separate locks, not one: the daily recommendation script
+# (run_recommendation.m) runs the Richards PDE solver and can take up to
+# `timeout_s` (30 min) — sharing one lock with the season-simulation script
+# (run_season_prediction.m, a lightweight day-by-day loop with no PDE solver)
+# meant a slow/stuck recommendation job blocked every Predictions-tab request
+# on the server for as long as it ran. They touch unrelated Octave scripts
+# with no shared state, so there's nothing to protect between them.
 ENGINE_LOCK = asyncio.Lock()
+SEASON_LOCK = asyncio.Lock()
 
 
 class EngineRunError(Exception):
@@ -17,13 +25,15 @@ async def run_engine(
     octave_cmd: str,
     script_path: str,
     timeout_s: int = 1800,
+    lock: asyncio.Lock | None = None,
 ) -> dict:
+    lock = lock or ENGINE_LOCK
     with tempfile.TemporaryDirectory() as tmp_dir:
         input_path = Path(tmp_dir) / "input.json"
         output_path = Path(tmp_dir) / "output.json"
         input_path.write_text(json.dumps(params))
 
-        async with ENGINE_LOCK:
+        async with lock:
             process = await asyncio.create_subprocess_exec(
                 octave_cmd,
                 script_path,

@@ -38,6 +38,7 @@ async def execute_job(job_id: str, field_id: str) -> None:
             "culture": field.crop,
             "lat": field.latitude,
             "lon": field.longitude,
+            "size_hectares": field.size_hectares,
             "jour_julien": field.engine_last_julian_day or date.today().timetuple().tm_yday,
             "psi_old": field.engine_psi_state,
             "theta_infiltre": field.engine_theta_infiltre,

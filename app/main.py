@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from . import models, schemas
 from .database import get_db
 from .engine_runner import EngineRunError, run_engine
-from .mock_engine import season_history, today_recommendation
 
 app = FastAPI(title="AquaTwin-Drip Mock API")
 
@@ -142,14 +141,14 @@ def _job_result_to_recommendation(job: models.RecommendationJobModel) -> dict:
     }
 
 
-def _current_recommendation(field_id: str, db: Session) -> dict:
-    """Prefers the latest completed real-engine run for this field; falls
-    back to the deterministic mock only if the engine has never completed
-    successfully for it yet."""
+def _current_recommendation(field_id: str, db: Session) -> dict | None:
+    """The latest completed real-engine run for this field, or None if the
+    engine has never completed successfully for it yet. No fabricated
+    fallback: a field with no real run has no recommendation, full stop."""
     job = _latest_done_job(field_id, db)
     if job is not None and job.result is not None:
         return _job_result_to_recommendation(job)
-    return today_recommendation(field_id, date.today())
+    return None
 
 
 def _field_or_404(field_id: str, db: Session) -> models.FieldModel:
@@ -234,7 +233,13 @@ def get_recommendation(
 ):
     field = _field_or_404(field_id, db)
     _require_field_access(field, current_user)
-    return _current_recommendation(field_id, db)
+    reco = _current_recommendation(field_id, db)
+    if reco is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Aucune recommandation disponible : aucun calcul n'a encore abouti pour ce champ.",
+        )
+    return reco
 
 
 @app.get("/fields/{field_id}/history", response_model=list[schemas.HistoryPointOut])
@@ -246,30 +251,27 @@ def get_history(
     field = _field_or_404(field_id, db)
     _require_field_access(field, current_user)
 
-    mock_points = season_history(field_id, date.today())
-
-    # Overlay any day where the real engine actually completed a run for
-    # this field on top of the mock series, so days that were genuinely
-    # computed stop showing fabricated numbers.
+    # Only days where the real engine actually completed a run for this
+    # field — no fabricated filler for days nothing was computed.
     done_jobs = (
         db.query(models.RecommendationJobModel)
         .filter_by(field_id=field_id, status="done")
         .order_by(models.RecommendationJobModel.finished_at.asc())
         .all()
     )
-    real_points_by_date = {}
+    points_by_date: dict[str, dict] = {}
     for job in done_jobs:
         if job.result is None or job.finished_at is None:
             continue
         reco = _job_result_to_recommendation(job)
-        real_points_by_date[reco["date"]] = {
+        points_by_date[reco["date"]] = {
             "date": reco["date"],
             "water_used_liters": reco["volume_liters"],
             "soil_moisture_percent": reco["soil_moisture_percent"],
             "severe_stress_alert": reco["severe_stress_alert"],
         }
 
-    return [real_points_by_date.get(point["date"], point) for point in mock_points]
+    return [points_by_date[d] for d in sorted(points_by_date)]
 
 
 @app.get("/cooperative/fields", response_model=list[schemas.FarmerFieldSummaryOut])
@@ -295,7 +297,8 @@ def list_managed_fields(
                 farmer_phone=field.owner.phone,
                 crop=field.crop,
                 size_hectares=field.size_hectares,
-                needs_attention=reco["severe_stress_alert"],
+                # No fabricated alert when no real run exists yet.
+                needs_attention=False if reco is None else reco["severe_stress_alert"],
             )
         )
     return summaries

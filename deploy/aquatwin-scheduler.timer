@@ -1,0 +1,14 @@
+[Unit]
+Description=Run aquatwin-scheduler once a day
+
+[Timer]
+# Once per calendar day, 02:00 server time — matches one engine run per
+# field per real day (the engine's jour_julien advances by 1 per call, so
+# calling it more than once a day would fast-forward the crop cycle).
+OnCalendar=*-*-* 02:00:00
+# If the VPS was down at 02:00, run as soon as it's back up instead of
+# waiting a full day.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

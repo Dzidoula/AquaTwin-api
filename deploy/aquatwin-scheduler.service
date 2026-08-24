@@ -1,0 +1,15 @@
+[Unit]
+Description=AquaTwin-Drip daily recommendation batch (one engine run per field)
+After=network.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/AquaTwin-api
+ExecStart=/home/ubuntu/AquaTwin-api/.venv/bin/python -m app.scheduler
+
+# Same environment as aquatwin-api.service — copy the Environment= lines
+# from `sudo cat /etc/systemd/system/aquatwin-api.service` here so the
+# scheduler sees the same DATABASE_URL / ENGINE_OCTAVE_CMD /
+# ENGINE_SCRIPT_PATH. Not duplicated in this repo since DATABASE_URL is a
+# secret that shouldn't be committed.

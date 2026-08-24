@@ -50,6 +50,30 @@ Les comptes créés par un agent via `POST /cooperative/farmers` sautent entièr
 
 Si vous aviez déjà une base `aquatwin_mock.db` d'avant cette fonctionnalité, supprimez-la (`rm backend/aquatwin_mock.db`) avant de relancer le serveur — le schéma a changé (colonne `name`).
 
+## Déclenchement automatique quotidien (scheduler)
+
+`app/scheduler.py` lance un calcul du vrai moteur pour chaque champ qui n'en a
+pas encore reçu un aujourd'hui — pas de repli mock : `GET .../recommendation`
+renvoie 404 et `GET .../history` une liste vide tant qu'aucun calcul réel n'a
+abouti pour un champ. Un seul calcul roule à la fois (le moteur ne supporte
+pas la concurrence), donc les champs sont traités en série ; l'échec d'un
+champ (bug de convergence, ISRIC indisponible...) n'empêche pas les suivants.
+
+Prévu pour tourner une fois par jour via un timer systemd (`deploy/`) : le
+moteur avance `jour_julien` de +1 à chaque appel, donc l'appeler plus d'une
+fois par jour ferait avancer le cycle de la culture plus vite que la réalité.
+
+```bash
+sudo cp deploy/aquatwin-scheduler.service deploy/aquatwin-scheduler.timer /etc/systemd/system/
+# Copier les lignes Environment= de aquatwin-api.service dans
+# aquatwin-scheduler.service (DATABASE_URL, ENGINE_OCTAVE_CMD, ENGINE_SCRIPT_PATH)
+sudo systemctl daemon-reload
+sudo systemctl enable --now aquatwin-scheduler.timer
+```
+
+Lancer un passage manuellement (test) : `sudo systemctl start aquatwin-scheduler.service`,
+puis `journalctl -u aquatwin-scheduler -n 50`.
+
 ## Endpoints
 
 | Méthode | Route | Description |

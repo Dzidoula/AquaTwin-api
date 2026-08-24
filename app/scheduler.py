@@ -44,19 +44,36 @@ async def run_daily_batch() -> None:
 
     db = SessionLocal()
     try:
-        fields = db.query(models.FieldModel).order_by(models.FieldModel.id).all()
-        due = [f for f in fields if not _has_job_today(db, f.id)]
-        logger.info("%d/%d fields due for today's run", len(due), len(fields))
+        all_ids = [f.id for f in db.query(models.FieldModel.id).order_by(models.FieldModel.id).all()]
+        # Plain strings, not ORM objects: a batch can span hours (up to 30
+        # min per field), and every db.commit() in the loop below expires
+        # every object already loaded in this session (SQLAlchemy's
+        # expire_on_commit default) — touching a FieldModel after that
+        # re-queries it, which raises ObjectDeletedError if that field was
+        # deleted in the meantime. Plain IDs sidestep that entirely.
+        due_ids = [field_id for field_id in all_ids if not _has_job_today(db, field_id)]
+        logger.info("%d/%d fields due for today's run", len(due_ids), len(all_ids))
 
-        for field in due:
-            job = models.RecommendationJobModel(field_id=field.id, status="pending")
-            db.add(job)
-            db.commit()
-            db.refresh(job)
-            logger.info("field %s: job %s starting", field.id, job.id)
-            await execute_job(job.id, field.id)
-            db.refresh(job)
-            logger.info("field %s: job %s finished with status=%s", field.id, job.id, job.status)
+        for field_id in due_ids:
+            try:
+                if db.query(models.FieldModel).filter_by(id=field_id).first() is None:
+                    logger.info("field %s: no longer exists, skipping", field_id)
+                    continue
+                job = models.RecommendationJobModel(field_id=field_id, status="pending")
+                db.add(job)
+                db.commit()
+                job_id = job.id
+                logger.info("field %s: job %s starting", field_id, job_id)
+                await execute_job(job_id, field_id)
+                finished = db.query(models.RecommendationJobModel).filter_by(id=job_id).first()
+                status = finished.status if finished else "unknown"
+                logger.info("field %s: job %s finished with status=%s", field_id, job_id, status)
+            except Exception:
+                # One field's DB/engine trouble must never stop the rest of
+                # the batch — log and move on, same spirit as execute_job
+                # already marking a failed run without raising.
+                db.rollback()
+                logger.exception("field %s: unexpected error, skipping", field_id)
     finally:
         db.close()
 

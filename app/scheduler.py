@@ -65,9 +65,15 @@ async def run_daily_batch() -> None:
                 job_id = job.id
                 logger.info("field %s: job %s starting", field_id, job_id)
                 await execute_job(job_id, field_id)
-                finished = db.query(models.RecommendationJobModel).filter_by(id=job_id).first()
-                status = finished.status if finished else "unknown"
-                logger.info("field %s: job %s finished with status=%s", field_id, job_id, status)
+                # execute_job commits through its own separate session — this
+                # session's identity map still holds the `job` object from
+                # right above (non-expired, since accessing `.id` after our
+                # own commit already reloaded it), so a plain requery here
+                # would just hand back that same stale object instead of
+                # reflecting the row execute_job actually wrote. db.refresh()
+                # forces a real re-SELECT.
+                db.refresh(job)
+                logger.info("field %s: job %s finished with status=%s", field_id, job_id, job.status)
             except Exception:
                 # One field's DB/engine trouble must never stop the rest of
                 # the batch — log and move on, same spirit as execute_job

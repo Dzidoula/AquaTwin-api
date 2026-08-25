@@ -103,3 +103,47 @@ def test_create_field_returns_the_planting_date(client):
 
     assert response.status_code == 201
     assert response.json()["planting_date"] == "2026-03-01"
+
+
+def test_create_field_stores_the_farmer_supplied_soil_type(client):
+    token = _login(client)
+
+    response = client.post(
+        "/fields",
+        json={
+            "crop": "mais", "size_hectares": 0.8, "latitude": 9.34,
+            "longitude": 2.63, "planting_date": "2026-03-01", "soil_type": "sableux",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["soil_type"] == "sableux"
+
+
+def test_create_field_defaults_soil_type_to_null_when_not_given(client):
+    token = _login(client)
+
+    response = client.post(
+        "/fields",
+        json={"crop": "mais", "size_hectares": 0.8, "latitude": 9.34, "longitude": 2.63, "planting_date": "2026-03-01"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["soil_type"] is None
+
+
+def test_create_field_rejects_an_unknown_soil_type(client):
+    token = _login(client)
+
+    response = client.post(
+        "/fields",
+        json={
+            "crop": "mais", "size_hectares": 0.8, "latitude": 9.34,
+            "longitude": 2.63, "planting_date": "2026-03-01", "soil_type": "sable-lunaire",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 422

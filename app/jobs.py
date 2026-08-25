@@ -39,6 +39,9 @@ async def execute_job(job_id: str, field_id: str) -> None:
             "lat": field.latitude,
             "lon": field.longitude,
             "size_hectares": field.size_hectares,
+            # Farmer-supplied at onboarding; None ("je ne sais pas") makes
+            # the engine fall back to classifySoilType (ISRIC) as before.
+            "type_sol": field.soil_type,
             "jour_julien": field.engine_last_julian_day or date.today().timetuple().tm_yday,
             "psi_old": field.engine_psi_state,
             "theta_infiltre": field.engine_theta_infiltre,

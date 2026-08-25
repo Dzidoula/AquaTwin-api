@@ -179,6 +179,7 @@ def create_field(
         latitude=payload.latitude,
         longitude=payload.longitude,
         planting_date=payload.planting_date,
+        soil_type=payload.soil_type,
     )
     db.add(field)
     db.commit()
@@ -190,6 +191,7 @@ def create_field(
         latitude=field.latitude,
         longitude=field.longitude,
         planting_date=field.planting_date,
+        soil_type=field.soil_type,
     )
 
 
@@ -207,6 +209,7 @@ def list_my_fields(
             latitude=f.latitude,
             longitude=f.longitude,
             planting_date=f.planting_date,
+            soil_type=f.soil_type,
         )
         for f in fields
     ]

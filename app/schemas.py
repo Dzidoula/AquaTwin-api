@@ -4,6 +4,12 @@ from pydantic import BaseModel
 
 Crop = Literal["mais", "tomate", "coton"]
 
+# The only 6 values TenseurSol.m actually branches on (see its `switch`) —
+# not the 11-way USDA classification classifySoilType.m/ISRIC produces.
+# Deliberately narrower: this is what the farmer picks, in a vocabulary
+# they can select from a short list.
+SoilType = Literal["sableux", "limoneux", "franco-limoneux", "argileux", "franco-argileux", "limono-argileux"]
+
 
 class OtpRequest(BaseModel):
     phone: str
@@ -44,6 +50,9 @@ class FieldIn(BaseModel):
     latitude: float
     longitude: float
     planting_date: str
+    # None ("je ne sais pas") means the engine falls back to classifySoilType
+    # (ISRIC) for this field, same as if it had never been given.
+    soil_type: SoilType | None = None
 
 
 class FieldUpdate(BaseModel):
@@ -57,6 +66,7 @@ class FieldOut(BaseModel):
     latitude: float
     longitude: float
     planting_date: str
+    soil_type: SoilType | None = None
 
 
 class RecommendationOut(BaseModel):

@@ -34,6 +34,11 @@ class FieldModel(Base):
     longitude = Column(Float, nullable=False)
     planting_date = Column(String, nullable=False)
 
+    # Farmer-supplied at onboarding, one of the 6 values TenseurSol.m
+    # switches on (see schemas.SoilType) — null ("je ne sais pas") means the
+    # engine falls back to classifySoilType (ISRIC) for this field.
+    soil_type = Column(String, nullable=True)
+
     # Soil state carried across daily engine calls — main.m originally keeps
     # this in memory across an infinite real-time loop; we persist it per
     # field instead so each call can pick up where the last one left off.

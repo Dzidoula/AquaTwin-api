@@ -78,6 +78,10 @@ async def execute_job(job_id: str, field_id: str) -> None:
                 "soil_moisture": result["soil_moisture"],
                 "severe_stress": result["severe_stress"],
             }
+            # Optional: absent when the engine had nothing to irrigate today
+            # (nothing to animate), or on older engine versions without it.
+            if result.get("animation"):
+                job.result["animation"] = result["animation"]
             field.engine_psi_state = result.get("psi_old")
             field.engine_theta_infiltre = result.get("theta_infiltre", field.engine_theta_infiltre)
             field.engine_last_julian_day = result.get("jour_julien", field.engine_last_julian_day)

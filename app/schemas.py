@@ -77,6 +77,21 @@ class RecommendationOut(BaseModel):
     severe_stress_alert: bool
     soil_moisture_percent: float
     explanation: str
+    # Whether this run produced wetting-bulb animation frames (see
+    # GET /fields/{id}/recommendation/animation) — a flag, not the frames
+    # themselves, since those run ~200KB and this endpoint is polled on
+    # every screen load.
+    has_animation: bool = False
+
+
+class AnimationFrameOut(BaseModel):
+    r_max: float
+    z_max: float
+    r_emitter: float
+    theta_r: float
+    theta_s: float
+    grid_res: int
+    frames: list[list[list[float]]]
 
 
 class HistoryPointOut(BaseModel):

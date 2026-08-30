@@ -139,6 +139,7 @@ def _job_result_to_recommendation(job: models.RecommendationJobModel) -> dict:
         "severe_stress_alert": bool(result.get("severe_stress", False)),
         "soil_moisture_percent": round(float(result.get("soil_moisture", 0) or 0) * 100, 1),
         "explanation": _engine_explanation(result),
+        "has_animation": bool(result.get("animation")),
     }
 
 
@@ -244,6 +245,25 @@ def get_recommendation(
             detail="Aucune recommandation disponible : aucun calcul n'a encore abouti pour ce champ.",
         )
     return reco
+
+
+@app.get("/fields/{field_id}/recommendation/animation", response_model=schemas.AnimationFrameOut)
+def get_recommendation_animation(
+    field_id: str,
+    current_user: models.UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Wetting-bulb animation frames for the latest completed run — fetched
+    separately from GET /recommendation (~200KB, not something every screen
+    load should pay for). 404 if the latest run didn't produce any (e.g.
+    nothing to irrigate that day, or an older engine version)."""
+    field = _field_or_404(field_id, db)
+    _require_field_access(field, current_user)
+    job = _latest_done_job(field_id, db)
+    animation = job.result.get("animation") if job is not None and job.result else None
+    if not animation:
+        raise HTTPException(status_code=404, detail="Pas d'animation disponible pour ce champ.")
+    return animation
 
 
 @app.get("/fields/{field_id}/history", response_model=list[schemas.HistoryPointOut])

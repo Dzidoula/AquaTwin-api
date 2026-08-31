@@ -7,6 +7,9 @@ FAKE_OCTAVE = os.path.join(os.path.dirname(__file__), "fixtures", "fake_octave.s
 FAKE_OCTAVE_WITH_ANIMATION = os.path.join(
     os.path.dirname(__file__), "fixtures", "fake_octave_with_animation.sh"
 )
+FAKE_OCTAVE_ALWAYS_FAILS = os.path.join(
+    os.path.dirname(__file__), "fixtures", "fake_octave_always_fails.sh"
+)
 
 
 def _run_simulation_and_wait(client, token, payload):
@@ -81,13 +84,13 @@ def test_simulation_includes_animation_when_the_engine_produces_one(client, monk
 
 
 def test_simulation_job_failure_is_reported(client, monkeypatch):
-    monkeypatch.setenv("ENGINE_OCTAVE_CMD", FAKE_OCTAVE)
+    monkeypatch.setenv("ENGINE_OCTAVE_CMD", FAKE_OCTAVE_ALWAYS_FAILS)
     monkeypatch.setenv("ENGINE_SCRIPT_PATH", "unused-by-fake")
 
     token = _login(client, phone="+22990000043")
     job_id = client.post(
         "/simulations/run",
-        json={"culture": "mais", "lat": 6.37, "lon": 2.39, "force_fail": True},
+        json={"culture": "mais", "lat": 6.37, "lon": 2.39},
         headers={"Authorization": f"Bearer {token}"},
     ).json()["job_id"]
 
@@ -101,6 +104,16 @@ def test_simulation_job_failure_is_reported(client, monkeypatch):
             return
         time.sleep(0.1)
     raise AssertionError("simulation job never failed as expected")
+
+
+def test_run_rejects_out_of_range_latitude(client):
+    token = _login(client, phone="+22990000045")
+    response = client.post(
+        "/simulations/run",
+        json={"culture": "mais", "lat": 999, "lon": 2.39},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 422
 
 
 def test_unknown_simulation_job_is_404(client):

@@ -409,7 +409,7 @@ async def run_simulation(
     current_user: models.UserModel = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    job = models.SimulationJobModel(status="pending")
+    job = models.SimulationJobModel(status="pending", user_id=current_user.id)
     db.add(job)
     db.commit()
     db.refresh(job)
@@ -423,7 +423,6 @@ async def run_simulation(
         "jour_julien": date.today().timetuple().tm_yday,
         "psi_old": None,
         "theta_infiltre": 0,
-        "force_fail": payload.force_fail,
     }
 
     task = asyncio.create_task(execute_simulation_job(job.id, params))

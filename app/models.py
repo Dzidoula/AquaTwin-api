@@ -68,6 +68,7 @@ class SimulationJobModel(Base):
     __tablename__ = "simulation_jobs"
 
     id = Column(String, primary_key=True, default=_new_id)
+    user_id = Column(String, ForeignKey("users.id"), nullable=True)
     status = Column(String, nullable=False, default="pending")  # pending|running|done|failed
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     finished_at = Column(DateTime, nullable=True)

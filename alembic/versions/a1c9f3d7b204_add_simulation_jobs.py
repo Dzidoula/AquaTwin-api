@@ -22,11 +22,13 @@ def upgrade() -> None:
     """Upgrade schema."""
     op.create_table('simulation_jobs',
     sa.Column('id', sa.String(), nullable=False),
+    sa.Column('user_id', sa.String(), nullable=True),
     sa.Column('status', sa.String(), nullable=False),
     sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.Column('finished_at', sa.DateTime(), nullable=True),
     sa.Column('result', sa.JSON(), nullable=True),
     sa.Column('error', sa.String(), nullable=True),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
 

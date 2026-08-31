@@ -131,3 +131,52 @@ async def execute_job(job_id: str, field_id: str) -> None:
             return
     finally:
         db.close()
+
+
+async def execute_simulation_job(job_id: str, params: dict) -> None:
+    from .database import SessionLocal
+
+    db: Session = SessionLocal()
+    try:
+        job = db.query(models.SimulationJobModel).filter_by(id=job_id).first()
+        if job is None:
+            return
+        job.status = "running"
+        db.commit()
+
+        octave_cmd, script_path = engine_config()
+        try:
+            result = await run_engine(params, octave_cmd=octave_cmd, script_path=script_path)
+        except EngineRunError as exc:
+            job.status = "failed"
+            job.error = exc.message
+            job.finished_at = datetime.now(timezone.utc)
+            db.commit()
+            return
+
+        try:
+            missing = [
+                key
+                for key in ("should_irrigate", "duration_s", "volume", "soil_moisture", "severe_stress")
+                if result.get(key) is None
+            ]
+            if missing:
+                raise ValueError(f"Champs manquants dans le resultat du moteur: {', '.join(missing)}")
+
+            finished_at = datetime.now(timezone.utc)
+            shaped = build_recommendation_dict(result, finished_at)
+            if result.get("animation"):
+                shaped["animation"] = result["animation"]
+            job.result = shaped
+            job.status = "done"
+            job.finished_at = finished_at
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            job.status = "failed"
+            job.error = f"Résultat du moteur invalide: {exc}"
+            job.finished_at = datetime.now(timezone.utc)
+            db.commit()
+            return
+    finally:
+        db.close()

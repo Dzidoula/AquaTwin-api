@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from . import models, schemas
 from .database import get_db
 from .engine_runner import SEASON_LOCK, EngineRunError, run_engine
-from .jobs import build_recommendation_dict, execute_job
+from .jobs import build_recommendation_dict, execute_job, execute_simulation_job
 
 app = FastAPI(title="AquaTwin-Drip Mock API")
 
@@ -395,6 +395,63 @@ def get_recommendation_job(
     return schemas.RecommendationJobOut(
         id=job.id,
         field_id=job.field_id,
+        status=job.status,
+        created_at=job.created_at.isoformat(),
+        finished_at=job.finished_at.isoformat() if job.finished_at else None,
+        result=job.result,
+        error=job.error,
+    )
+
+
+@app.post("/simulations/run", response_model=schemas.RunJobResponse, status_code=202)
+async def run_simulation(
+    payload: schemas.SimulationRunRequest,
+    current_user: models.UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    job = models.SimulationJobModel(status="pending")
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    params = {
+        "culture": payload.culture,
+        "lat": payload.lat,
+        "lon": payload.lon,
+        "size_hectares": payload.size_hectares,
+        "type_sol": payload.type_sol,
+        "jour_julien": date.today().timetuple().tm_yday,
+        "psi_old": None,
+        "theta_infiltre": 0,
+    }
+    # SimulationRunRequest allows (and thus retains) extra keys — forward any
+    # raw testing-only ones (e.g. `force_fail`) straight into the engine
+    # input file, exactly like `execute_job` already does implicitly by
+    # building its own `params` dict from the field row.
+    known_fields = {"culture", "lat", "lon", "size_hectares", "type_sol"}
+    params.update(
+        {k: v for k, v in payload.model_dump().items() if k not in known_fields}
+    )
+
+    task = asyncio.create_task(execute_simulation_job(job.id, params))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+    return schemas.RunJobResponse(job_id=job.id, status=job.status)
+
+
+@app.get("/simulations/jobs/{job_id}", response_model=schemas.SimulationJobOut)
+def get_simulation_job(
+    job_id: str,
+    current_user: models.UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    job = db.query(models.SimulationJobModel).filter_by(id=job_id).first()
+    if job is None:
+        raise HTTPException(status_code=404, detail="Simulation introuvable")
+
+    return schemas.SimulationJobOut(
+        id=job.id,
         status=job.status,
         created_at=job.created_at.isoformat(),
         finished_at=job.finished_at.isoformat() if job.finished_at else None,

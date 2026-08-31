@@ -62,3 +62,14 @@ class RecommendationJobModel(Base):
     error = Column(String, nullable=True)
 
     field = relationship("FieldModel", back_populates="jobs")
+
+
+class SimulationJobModel(Base):
+    __tablename__ = "simulation_jobs"
+
+    id = Column(String, primary_key=True, default=_new_id)
+    status = Column(String, nullable=False, default="pending")  # pending|running|done|failed
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    finished_at = Column(DateTime, nullable=True)
+    result = Column(JSON, nullable=True)
+    error = Column(String, nullable=True)

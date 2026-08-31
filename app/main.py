@@ -423,15 +423,8 @@ async def run_simulation(
         "jour_julien": date.today().timetuple().tm_yday,
         "psi_old": None,
         "theta_infiltre": 0,
+        "force_fail": payload.force_fail,
     }
-    # SimulationRunRequest allows (and thus retains) extra keys — forward any
-    # raw testing-only ones (e.g. `force_fail`) straight into the engine
-    # input file, exactly like `execute_job` already does implicitly by
-    # building its own `params` dict from the field row.
-    known_fields = {"culture", "lat", "lon", "size_hectares", "type_sol"}
-    params.update(
-        {k: v for k, v in payload.model_dump().items() if k not in known_fields}
-    )
 
     task = asyncio.create_task(execute_simulation_job(job.id, params))
     _background_tasks.add(task)

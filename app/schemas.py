@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 Crop = Literal["mais", "tomate", "coton"]
 
@@ -126,17 +126,15 @@ class RunJobResponse(BaseModel):
 
 
 class SimulationRunRequest(BaseModel):
-    # extra="allow" so raw testing-only keys (e.g. `force_fail`, used by
-    # tests/fixtures/fake_octave.sh) survive validation and can be forwarded
-    # straight into the engine input file by the endpoint below — see
-    # jobs.execute_simulation_job's docstring note.
-    model_config = ConfigDict(extra="allow")
-
     culture: Crop
     lat: float
     lon: float
     size_hectares: float | None = None
     type_sol: SoilType | None = None
+    # Test-only escape hatch, forwarded verbatim to the engine's input JSON so
+    # tests/fixtures/fake_octave.sh can simulate an engine failure. A real
+    # client never sets this; it defaults to False and is harmless when unset.
+    force_fail: bool = False
 
 
 class SimulationJobOut(BaseModel):

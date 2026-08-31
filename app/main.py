@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from . import models, schemas
 from .database import get_db
 from .engine_runner import SEASON_LOCK, EngineRunError, run_engine
-from .jobs import execute_job
+from .jobs import build_recommendation_dict, execute_job
 
 app = FastAPI(title="AquaTwin-Drip Mock API")
 
@@ -108,39 +108,8 @@ def _latest_done_job(field_id: str, db: Session) -> models.RecommendationJobMode
     )
 
 
-def _engine_explanation(result: dict) -> str:
-    moisture_pct = float(result.get("soil_moisture", 0) or 0) * 100
-    if result.get("severe_stress"):
-        return (
-            f"Humidité du sol à {moisture_pct:.0f}% (moteur physique) : stress "
-            "hydrique sévère détecté, arrosage recommandé sans délai."
-        )
-    if result.get("should_irrigate"):
-        duration_min = round((result.get("duration_s", 0) or 0) / 60)
-        volume = float(result.get("volume", 0) or 0)
-        return (
-            f"Humidité du sol à {moisture_pct:.0f}% (moteur physique) : un "
-            f"arrosage de {duration_min} min ({volume:.0f} L) est recommandé aujourd'hui."
-        )
-    return f"Humidité du sol à {moisture_pct:.0f}% (moteur physique) : pas d'arrosage nécessaire aujourd'hui."
-
-
 def _job_result_to_recommendation(job: models.RecommendationJobModel) -> dict:
-    result = job.result
-    # The engine reports soil moisture as a volumetric fraction (theta,
-    # typically 0-0.5) and duration in seconds; the API/app contract expects
-    # a 0-100 percent and minutes. Straight unit conversion, not a change to
-    # the physical model.
-    return {
-        "date": job.finished_at.date().isoformat(),
-        "should_irrigate": bool(result.get("should_irrigate", False)),
-        "duration_minutes": round((result.get("duration_s", 0) or 0) / 60),
-        "volume_liters": round(float(result.get("volume", 0) or 0), 1),
-        "severe_stress_alert": bool(result.get("severe_stress", False)),
-        "soil_moisture_percent": round(float(result.get("soil_moisture", 0) or 0) * 100, 1),
-        "explanation": _engine_explanation(result),
-        "has_animation": bool(result.get("animation")),
-    }
+    return build_recommendation_dict(job.result, job.finished_at)
 
 
 def _current_recommendation(field_id: str, db: Session) -> dict | None:

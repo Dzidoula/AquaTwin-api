@@ -15,6 +15,40 @@ from . import models
 from .engine_runner import EngineRunError, run_engine
 
 
+def _engine_explanation(result: dict) -> str:
+    moisture_pct = float(result.get("soil_moisture", 0) or 0) * 100
+    if result.get("severe_stress"):
+        return (
+            f"Humidité du sol à {moisture_pct:.0f}% (moteur physique) : stress "
+            "hydrique sévère détecté, arrosage recommandé sans délai."
+        )
+    if result.get("should_irrigate"):
+        duration_min = round((result.get("duration_s", 0) or 0) / 60)
+        volume = float(result.get("volume", 0) or 0)
+        return (
+            f"Humidité du sol à {moisture_pct:.0f}% (moteur physique) : un "
+            f"arrosage de {duration_min} min ({volume:.0f} L) est recommandé aujourd'hui."
+        )
+    return f"Humidité du sol à {moisture_pct:.0f}% (moteur physique) : pas d'arrosage nécessaire aujourd'hui."
+
+
+def build_recommendation_dict(result: dict, finished_at: datetime) -> dict:
+    """Shapes a raw engine result (theta fractions, seconds) into the
+    farmer-facing units the app expects (percent, minutes) — shared by the
+    field-scoped recommendation endpoint (app/main.py) and the ad-hoc
+    simulation job (execute_simulation_job, added in Task 2)."""
+    return {
+        "date": finished_at.date().isoformat(),
+        "should_irrigate": bool(result.get("should_irrigate", False)),
+        "duration_minutes": round((result.get("duration_s", 0) or 0) / 60),
+        "volume_liters": round(float(result.get("volume", 0) or 0), 1),
+        "severe_stress_alert": bool(result.get("severe_stress", False)),
+        "soil_moisture_percent": round(float(result.get("soil_moisture", 0) or 0) * 100, 1),
+        "explanation": _engine_explanation(result),
+        "has_animation": bool(result.get("animation")),
+    }
+
+
 def engine_config() -> tuple[str, str]:
     octave_cmd = os.environ.get("ENGINE_OCTAVE_CMD", "octave")
     script_path = os.environ.get("ENGINE_SCRIPT_PATH", "run_recommendation.m")

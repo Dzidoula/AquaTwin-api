@@ -91,6 +91,10 @@ class AnimationFrameOut(BaseModel):
     theta_r: float
     theta_s: float
     grid_res: int
+    # Temps reel ecoule (s) pour chaque frame — meme convention que le titre
+    # 'Drip Irrigation : t = ...' d'Animation2DIrrigation.m. Absent sur un
+    # resultat produit par un engine plus ancien : optionnel, defaut vide.
+    frame_times_s: list[float] = []
     frames: list[list[list[float]]]
 
 

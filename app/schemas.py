@@ -102,6 +102,15 @@ class AnimationFrameOut(BaseModel):
     # resultat produit par un engine plus ancien : optionnel, defaut vide.
     frame_times_s: list[float] = []
     frames: list[list[list[float]]]
+    # Series temporelles deja calculees par
+    # TraceTeneurEnEauRacinaireStresseHydriqueEtPotentielHydrique_.m pour son
+    # propre graphique 3-panneaux (teneur en eau racinaire, stress hydrique,
+    # potentiel hydrique) — exportees telles quelles. Optionnelles/vides sur
+    # un resultat produit par un engine plus ancien.
+    trend_t_s: list[float] = []
+    trend_theta_root: list[float] = []
+    trend_stress_hydrique: list[float] = []
+    trend_potentiel_hydrique: list[float] = []
 
 
 class HistoryPointOut(BaseModel):

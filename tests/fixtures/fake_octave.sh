@@ -26,6 +26,7 @@ sleep 0.2
 cat > "$output_path" <<'JSON'
 {"should_irrigate": true, "duration_s": 131.79, "volume": 0.0,
  "soil_moisture": 0.31, "severe_stress": false,
- "psi_old": [1.0, 2.0, 3.0], "theta_infiltre": 0.02, "jour_julien": 221}
+ "psi_old": [1.0, 2.0, 3.0], "theta_infiltre": 0.02, "jour_julien": 221,
+ "eto_mm_jour": 4.1, "pluie_48h_mm": 16.7}
 JSON
 exit 0

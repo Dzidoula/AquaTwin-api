@@ -88,6 +88,13 @@ class RecommendationOut(BaseModel):
     # themselves, since those run ~200KB and this endpoint is polled on
     # every screen load.
     has_animation: bool = False
+    # None when Open-Meteo was unreachable for this run (same T<0 fallback
+    # as the rest of the engine) — the app shows "-" in that case rather
+    # than a fabricated value. Absent entirely on a result from an older
+    # engine version, same "optional/default" convention as the animation
+    # trend fields above.
+    eto_mm_jour: float | None = None
+    pluie_48h_mm: float | None = None
 
 
 class AnimationFrameOut(BaseModel):

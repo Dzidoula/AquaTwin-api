@@ -49,6 +49,13 @@ def test_run_and_poll_job_reaches_done(client, monkeypatch):
         time.sleep(0.1)
     assert status == "done"
 
+    reco = client.get(
+        f"/fields/{field_id}/recommendation",
+        headers={"Authorization": f"Bearer {token}"},
+    ).json()
+    assert reco["eto_mm_jour"] == 4.1
+    assert reco["pluie_48h_mm"] == 16.7
+
 
 def test_run_job_requires_auth(client):
     resp = client.post("/fields/anything/recommendation/run")

@@ -46,6 +46,8 @@ def build_recommendation_dict(result: dict, finished_at: datetime) -> dict:
         "soil_moisture_percent": round(float(result.get("soil_moisture", 0) or 0) * 100, 1),
         "explanation": _engine_explanation(result),
         "has_animation": bool(result.get("animation")),
+        "eto_mm_jour": result.get("eto_mm_jour"),
+        "pluie_48h_mm": result.get("pluie_48h_mm"),
     }
 
 
@@ -128,6 +130,8 @@ async def execute_job(job_id: str, field_id: str) -> None:
                 "volume": result["volume"],
                 "soil_moisture": result["soil_moisture"],
                 "severe_stress": result["severe_stress"],
+                "eto_mm_jour": result.get("eto_mm_jour"),
+                "pluie_48h_mm": result.get("pluie_48h_mm"),
             }
             # Optional: absent when the engine had nothing to irrigate today
             # (nothing to animate), or on older engine versions without it.

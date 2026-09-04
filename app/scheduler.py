@@ -44,7 +44,17 @@ async def run_daily_batch() -> None:
 
     db = SessionLocal()
     try:
-        all_ids = [f.id for f in db.query(models.FieldModel.id).order_by(models.FieldModel.id).all()]
+        # Only fields the farmer has explicitly started (see
+        # PATCH /fields/{id} auto_recommend_enabled) — this used to run
+        # unconditionally for every field; a farmer now opts in via a
+        # button in the app rather than it running before they asked.
+        all_ids = [
+            f.id
+            for f in db.query(models.FieldModel.id)
+            .filter_by(auto_recommend_enabled=True)
+            .order_by(models.FieldModel.id)
+            .all()
+        ]
         # Plain strings, not ORM objects: a batch can span hours (up to 30
         # min per field), and every db.commit() in the loop below expires
         # every object already loaded in this session (SQLAlchemy's

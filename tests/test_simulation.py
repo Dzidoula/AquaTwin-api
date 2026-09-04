@@ -2,6 +2,7 @@ import os
 import time
 
 from tests.test_fields import _login
+from app.jobs import emitter_flow_env
 
 FAKE_OCTAVE = os.path.join(os.path.dirname(__file__), "fixtures", "fake_octave.sh")
 FAKE_OCTAVE_WITH_ANIMATION = os.path.join(
@@ -123,3 +124,14 @@ def test_unknown_simulation_job_is_404(client):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 404
+
+
+def test_emitter_flow_env_converts_lh_to_m3s():
+    env = emitter_flow_env(4.0)
+    assert set(env.keys()) == {"Q_IRR_OVERRIDE_M3S"}
+    # 4 L/h = 4e-3 m^3 / 3600 s
+    assert abs(float(env["Q_IRR_OVERRIDE_M3S"]) - (4.0 * 1e-3 / 3600)) < 1e-12
+
+
+def test_emitter_flow_env_is_empty_when_not_given():
+    assert emitter_flow_env(None) == {}

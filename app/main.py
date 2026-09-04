@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from . import models, schemas
 from .database import get_db
 from .engine_runner import SEASON_LOCK, EngineRunError, run_engine
-from .jobs import build_recommendation_dict, execute_job, execute_simulation_job
+from .jobs import build_recommendation_dict, emitter_flow_env, execute_job, execute_simulation_job
 
 app = FastAPI(title="AquaTwin-Drip Mock API")
 
@@ -150,6 +150,7 @@ def create_field(
         longitude=payload.longitude,
         planting_date=payload.planting_date,
         soil_type=payload.soil_type,
+        emitter_flow_lh=payload.emitter_flow_lh,
     )
     db.add(field)
     db.commit()
@@ -162,6 +163,8 @@ def create_field(
         longitude=field.longitude,
         planting_date=field.planting_date,
         soil_type=field.soil_type,
+        emitter_flow_lh=field.emitter_flow_lh,
+        auto_recommend_enabled=field.auto_recommend_enabled,
     )
 
 
@@ -180,6 +183,8 @@ def list_my_fields(
             longitude=f.longitude,
             planting_date=f.planting_date,
             soil_type=f.soil_type,
+            emitter_flow_lh=f.emitter_flow_lh,
+            auto_recommend_enabled=f.auto_recommend_enabled,
         )
         for f in fields
     ]
@@ -194,7 +199,10 @@ def update_field(
 ):
     field = _field_or_404(field_id, db)
     _require_field_access(field, current_user)
-    field.size_hectares = payload.size_hectares
+    if payload.size_hectares is not None:
+        field.size_hectares = payload.size_hectares
+    if payload.auto_recommend_enabled is not None:
+        field.auto_recommend_enabled = payload.auto_recommend_enabled
     db.commit()
     return {}
 
@@ -425,7 +433,9 @@ async def run_simulation(
         "theta_infiltre": 0,
     }
 
-    task = asyncio.create_task(execute_simulation_job(job.id, params))
+    task = asyncio.create_task(
+        execute_simulation_job(job.id, params, extra_env=emitter_flow_env(payload.emitter_flow_lh))
+    )
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
 

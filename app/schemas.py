@@ -53,10 +53,14 @@ class FieldIn(BaseModel):
     # None ("je ne sais pas") means the engine falls back to classifySoilType
     # (ISRIC) for this field, same as if it had never been given.
     soil_type: SoilType | None = None
+    # None means the engine falls back to its own hardcoded default
+    # (parameterGoutteur.m) — same "null = default" spirit as soil_type.
+    emitter_flow_lh: float | None = Field(default=None, gt=0)
 
 
 class FieldUpdate(BaseModel):
-    size_hectares: float
+    size_hectares: float | None = None
+    auto_recommend_enabled: bool | None = None
 
 
 class FieldOut(BaseModel):
@@ -67,6 +71,8 @@ class FieldOut(BaseModel):
     longitude: float
     planting_date: str
     soil_type: SoilType | None = None
+    emitter_flow_lh: float | None = None
+    auto_recommend_enabled: bool = False
 
 
 class RecommendationOut(BaseModel):
@@ -135,6 +141,7 @@ class SimulationRunRequest(BaseModel):
     lon: float = Field(ge=-180, le=180)
     size_hectares: float | None = Field(default=None, gt=0)
     type_sol: SoilType | None = None
+    emitter_flow_lh: float | None = Field(default=None, gt=0)
 
 
 class SimulationJobOut(BaseModel):

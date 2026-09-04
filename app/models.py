@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import JSON, Boolean, Column, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from .database import Base
@@ -45,6 +45,20 @@ class FieldModel(Base):
     engine_psi_state = Column(JSON, nullable=True)
     engine_theta_infiltre = Column(Float, nullable=False, default=0.0)
     engine_last_julian_day = Column(Integer, nullable=True)
+
+    # Farmer-chosen emitter flow rate (L/h, from a dropdown of common drip
+    # emitter ratings). Null means the engine falls back to its own
+    # hardcoded default (parameterGoutteur.m), same "null = default" spirit
+    # as soil_type.
+    emitter_flow_lh = Column(Float, nullable=True)
+
+    # main.m's real-time loop recomputes a recommendation continuously by
+    # itself; our scheduler (app/scheduler.py) does the once-a-day
+    # equivalent for every field unconditionally today. This flag lets a
+    # farmer explicitly start/stop that automatic daily run for their own
+    # field rather than it always being on. Defaults to off — a farmer
+    # presses "start" once ready, rather than it running before they asked.
+    auto_recommend_enabled = Column(Boolean, nullable=False, default=False)
 
     owner = relationship("UserModel", back_populates="fields")
     jobs = relationship("RecommendationJobModel", back_populates="field", cascade="all, delete-orphan")

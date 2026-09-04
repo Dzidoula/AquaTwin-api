@@ -147,3 +147,65 @@ def test_create_field_rejects_an_unknown_soil_type(client):
     )
 
     assert response.status_code == 422
+
+
+def test_create_field_stores_the_farmer_supplied_emitter_flow_rate(client):
+    token = _login(client)
+
+    response = client.post(
+        "/fields",
+        json={
+            "crop": "mais", "size_hectares": 0.8, "latitude": 9.34,
+            "longitude": 2.63, "planting_date": "2026-03-01", "emitter_flow_lh": 4.0,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["emitter_flow_lh"] == 4.0
+
+
+def test_create_field_defaults_emitter_flow_rate_to_null_when_not_given(client):
+    token = _login(client)
+
+    response = client.post(
+        "/fields",
+        json={"crop": "mais", "size_hectares": 0.8, "latitude": 9.34, "longitude": 2.63, "planting_date": "2026-03-01"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["emitter_flow_lh"] is None
+
+
+def test_create_field_defaults_auto_recommend_enabled_to_false(client):
+    token = _login(client)
+
+    response = client.post(
+        "/fields",
+        json={"crop": "mais", "size_hectares": 0.8, "latitude": 9.34, "longitude": 2.63, "planting_date": "2026-03-01"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["auto_recommend_enabled"] is False
+
+
+def test_update_field_can_toggle_auto_recommend_without_touching_size(client):
+    token = _login(client)
+    field_id = client.post(
+        "/fields",
+        json={"crop": "mais", "size_hectares": 0.8, "latitude": 9.34, "longitude": 2.63, "planting_date": "2026-03-01"},
+        headers={"Authorization": f"Bearer {token}"},
+    ).json()["id"]
+
+    response = client.patch(
+        f"/fields/{field_id}",
+        json={"auto_recommend_enabled": True},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+
+    field = client.get("/fields/mine", headers={"Authorization": f"Bearer {token}"}).json()[0]
+    assert field["auto_recommend_enabled"] is True
+    assert field["size_hectares"] == 0.8

@@ -9,6 +9,7 @@ from app.engine_runner import run_engine, EngineRunError, ENGINE_LOCK, SEASON_LO
 
 
 FAKE_OCTAVE = os.path.join(os.path.dirname(__file__), "fixtures", "fake_octave.sh")
+FAKE_OCTAVE_ECHO_ENV = os.path.join(os.path.dirname(__file__), "fixtures", "fake_octave_echo_env.sh")
 
 
 @pytest.mark.asyncio
@@ -21,6 +22,17 @@ async def test_run_engine_returns_parsed_output():
     )
     assert result["should_irrigate"] is True
     assert result["duration_s"] == 131.79
+
+
+@pytest.mark.asyncio
+async def test_run_engine_passes_extra_env_to_the_subprocess():
+    result = await run_engine(
+        params={"culture": "mais", "lat": 9.3, "lon": 2.6},
+        octave_cmd=FAKE_OCTAVE_ECHO_ENV,
+        script_path="unused-by-fake",
+        extra_env={"TEST_ECHO_VAR": "hello-from-extra-env"},
+    )
+    assert result["echoed"] == "hello-from-extra-env"
 
 
 @pytest.mark.asyncio

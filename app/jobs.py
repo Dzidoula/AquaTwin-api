@@ -55,6 +55,18 @@ def engine_config() -> tuple[str, str]:
     return octave_cmd, script_path
 
 
+def emitter_flow_env(emitter_flow_lh: float | None) -> dict[str, str]:
+    """Farmer-chosen emitter flow rate (L/h, from a dropdown), converted to
+    the m^3/s parameterGoutteur.m expects and passed as an environment
+    variable to the Octave subprocess — see Q_IRR_OVERRIDE_M3S there. Empty
+    dict (no override) when the farmer didn't pick one, so the engine keeps
+    its own hardcoded default."""
+    if emitter_flow_lh is None:
+        return {}
+    q_irr_m3s = emitter_flow_lh * 1e-3 / 3600
+    return {"Q_IRR_OVERRIDE_M3S": repr(q_irr_m3s)}
+
+
 async def execute_job(job_id: str, field_id: str) -> None:
     from .database import SessionLocal
 
@@ -81,7 +93,12 @@ async def execute_job(job_id: str, field_id: str) -> None:
             "theta_infiltre": field.engine_theta_infiltre,
         }
         try:
-            result = await run_engine(params, octave_cmd=octave_cmd, script_path=script_path)
+            result = await run_engine(
+                params,
+                octave_cmd=octave_cmd,
+                script_path=script_path,
+                extra_env=emitter_flow_env(field.emitter_flow_lh),
+            )
         except EngineRunError as exc:
             job.status = "failed"
             job.error = exc.message
@@ -133,7 +150,7 @@ async def execute_job(job_id: str, field_id: str) -> None:
         db.close()
 
 
-async def execute_simulation_job(job_id: str, params: dict) -> None:
+async def execute_simulation_job(job_id: str, params: dict, extra_env: dict[str, str] | None = None) -> None:
     from .database import SessionLocal
 
     db: Session = SessionLocal()
@@ -146,7 +163,9 @@ async def execute_simulation_job(job_id: str, params: dict) -> None:
 
         octave_cmd, script_path = engine_config()
         try:
-            result = await run_engine(params, octave_cmd=octave_cmd, script_path=script_path)
+            result = await run_engine(
+                params, octave_cmd=octave_cmd, script_path=script_path, extra_env=extra_env
+            )
         except EngineRunError as exc:
             job.status = "failed"
             job.error = exc.message

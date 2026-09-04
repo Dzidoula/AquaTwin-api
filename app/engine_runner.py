@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import tempfile
 from pathlib import Path
 
@@ -26,12 +27,15 @@ async def run_engine(
     script_path: str,
     timeout_s: int = 1800,
     lock: asyncio.Lock | None = None,
+    extra_env: dict[str, str] | None = None,
 ) -> dict:
     lock = lock or ENGINE_LOCK
     with tempfile.TemporaryDirectory() as tmp_dir:
         input_path = Path(tmp_dir) / "input.json"
         output_path = Path(tmp_dir) / "output.json"
         input_path.write_text(json.dumps(params))
+
+        env = {**os.environ, **extra_env} if extra_env else None
 
         async with lock:
             process = await asyncio.create_subprocess_exec(
@@ -41,6 +45,7 @@ async def run_engine(
                 str(output_path),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=env,
             )
             try:
                 stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout_s)

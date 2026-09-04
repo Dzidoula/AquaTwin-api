@@ -14,14 +14,21 @@ def _login(client, phone="+22990000040"):
     return resp.json()["token"]
 
 
-def _make_field(client, token, **overrides):
+def _make_field(client, token, auto_recommend=True, **overrides):
     payload = {
         "crop": "mais", "size_hectares": 1.0, "latitude": 9.3,
         "longitude": 2.6, "planting_date": "2026-06-01",
     }
     payload.update(overrides)
     resp = client.post("/fields", headers={"Authorization": f"Bearer {token}"}, json=payload)
-    return resp.json()["id"]
+    field_id = resp.json()["id"]
+    if auto_recommend:
+        client.patch(
+            f"/fields/{field_id}",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"auto_recommend_enabled": True},
+        )
+    return field_id
 
 
 async def test_run_daily_batch_creates_and_runs_a_job_per_field(client, monkeypatch):
@@ -38,6 +45,23 @@ async def test_run_daily_batch_creates_and_runs_a_job_per_field(client, monkeypa
         headers={"Authorization": f"Bearer {token}"},
     ).json()
     assert len(history) == 1
+
+
+async def test_run_daily_batch_skips_a_field_with_auto_recommend_disabled(client, monkeypatch):
+    monkeypatch.setenv("ENGINE_OCTAVE_CMD", FAKE_OCTAVE)
+    monkeypatch.setenv("ENGINE_SCRIPT_PATH", "unused-by-fake")
+
+    token = _login(client)
+    field_id = _make_field(client, token, auto_recommend=False)
+
+    await run_daily_batch()
+
+    history = client.get(
+        f"/fields/{field_id}/history",
+        headers={"Authorization": f"Bearer {token}"},
+    ).json()
+    # A field the farmer never started stays untouched by the daily batch.
+    assert history == []
 
 
 async def test_run_daily_batch_skips_a_field_that_already_has_a_job_today(client, monkeypatch):

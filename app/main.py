@@ -349,6 +349,12 @@ def _season_data_driven_engine_config() -> tuple[str, str]:
     return octave_cmd, script_path
 
 
+def _optimal_harvest_engine_config() -> tuple[str, str]:
+    octave_cmd = os.environ.get("ENGINE_OCTAVE_CMD", "octave")
+    script_path = os.environ.get("OPTIMAL_HARVEST_SCRIPT_PATH", "run_optimal_harvest.m")
+    return octave_cmd, script_path
+
+
 @app.post("/fields/{field_id}/season-simulation", response_model=schemas.SeasonSimulationOut)
 async def simulate_season(
     field_id: str,
@@ -421,6 +427,47 @@ async def simulate_season_data_driven(
         rendement=result["rendement"],
         biomasse=result["biomasse"],
         appreciation=result["appreciation"],
+    )
+
+
+@app.post("/fields/{field_id}/optimal-harvest", response_model=schemas.OptimalHarvestOut)
+async def find_optimal_harvest(
+    field_id: str,
+    current_user: models.UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Alex's OptimalHarvest.m, ported to run under Octave with an
+    iteration cap (OptimalHarvestDataDriven.m — see its own comments: the
+    original's stop condition checked for a value EvaluerRendement.m can
+    never return, so it never terminated on its own, even under MATLAB).
+    Searches for the best-yield irrigation strategy for the Prévisions
+    screen's "meilleur rendement" feature."""
+    field = _field_or_404(field_id, db)
+    _require_field_access(field, current_user)
+
+    octave_cmd, script_path = _optimal_harvest_engine_config()
+    params = {
+        "lat": field.latitude,
+        "lon": field.longitude,
+        "culture": field.crop,
+        "date_semence": field.planting_date,
+    }
+    try:
+        result = await run_engine(
+            params,
+            octave_cmd=octave_cmd,
+            script_path=script_path,
+            lock=SEASON_LOCK,
+            timeout_s=300,
+        )
+    except EngineRunError as exc:
+        raise HTTPException(status_code=502, detail=exc.message)
+
+    return schemas.OptimalHarvestOut(
+        rendement=result["rendement"],
+        optimal_eto=result["optimal_eto"],
+        appreciation=result["appreciation"],
+        n_iterations=result["n_iterations"],
     )
 
 

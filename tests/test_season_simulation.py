@@ -136,3 +136,59 @@ def test_season_simulation_data_driven_surfaces_engine_failure(client, monkeypat
         json={"jours_test": [6], "eto_test": [4.0]},
     )
     assert resp.status_code == 502
+
+
+FAKE_OCTAVE_OPTIMAL_HARVEST = os.path.join(
+    os.path.dirname(__file__), "fixtures", "fake_octave_optimal_harvest.sh"
+)
+
+
+def test_optimal_harvest_returns_the_best_scenario_found(client, monkeypatch):
+    monkeypatch.setenv("ENGINE_OCTAVE_CMD", FAKE_OCTAVE_OPTIMAL_HARVEST)
+    monkeypatch.setenv("OPTIMAL_HARVEST_SCRIPT_PATH", "unused-by-fake")
+
+    token = _login(client, phone="+22990000027")
+    field_id = _make_field(client, token)
+
+    resp = client.post(
+        f"/fields/{field_id}/optimal-harvest",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["rendement"] == 8200.5
+    assert body["optimal_eto"] == 4.5
+    assert body["appreciation"] == "Exceptionnel"
+    assert body["n_iterations"] == 3
+
+
+def test_optimal_harvest_requires_auth(client):
+    resp = client.post("/fields/anything/optimal-harvest")
+    assert resp.status_code == 401
+
+
+def test_optimal_harvest_rejects_other_owners_field(client):
+    token_a = _login(client, phone="+22990000028")
+    field_id = _make_field(client, token_a)
+    token_b = _login(client, phone="+22990000029")
+
+    resp = client.post(
+        f"/fields/{field_id}/optimal-harvest",
+        headers={"Authorization": f"Bearer {token_b}"},
+    )
+    assert resp.status_code == 403
+
+
+def test_optimal_harvest_surfaces_engine_failure(client, monkeypatch):
+    failing_octave = os.path.join(os.path.dirname(__file__), "fixtures", "fake_octave_always_fails.sh")
+    monkeypatch.setenv("ENGINE_OCTAVE_CMD", failing_octave)
+    monkeypatch.setenv("OPTIMAL_HARVEST_SCRIPT_PATH", "unused-by-fake")
+
+    token = _login(client, phone="+22990000030")
+    field_id = _make_field(client, token)
+
+    resp = client.post(
+        f"/fields/{field_id}/optimal-harvest",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 502

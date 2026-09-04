@@ -181,3 +181,10 @@ class SeasonSimulationDataDrivenOut(BaseModel):
     rendement: float
     biomasse: float
     appreciation: str
+
+
+class OptimalHarvestOut(BaseModel):
+    rendement: float
+    optimal_eto: float
+    appreciation: str
+    n_iterations: int

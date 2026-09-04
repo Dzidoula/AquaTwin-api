@@ -427,6 +427,7 @@ async def simulate_season_data_driven(
         rendement=result["rendement"],
         biomasse=result["biomasse"],
         appreciation=result["appreciation"],
+        points=[schemas.SeasonPointOut(**p) for p in result.get("points", [])],
     )
 
 

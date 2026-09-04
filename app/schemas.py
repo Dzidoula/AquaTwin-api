@@ -197,6 +197,10 @@ class SeasonSimulationDataDrivenOut(BaseModel):
     rendement: float
     biomasse: float
     appreciation: str
+    # Trajectoire jour-par-jour (voir PredictSeasonYieldDataDriven.m) pour
+    # tracer la courbe du modele IA cote appli — vide sur un resultat
+    # produit par un moteur plus ancien sans ce champ.
+    points: list[SeasonPointOut] = []
 
 
 class OptimalHarvestOut(BaseModel):

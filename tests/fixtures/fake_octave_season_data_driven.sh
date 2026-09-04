@@ -8,6 +8,8 @@ set -euo pipefail
 output_path="$3"
 
 cat > "$output_path" <<'JSON'
-{"rendement": 6611.44, "biomasse": 13222.88, "appreciation": "Bon"}
+{"rendement": 6611.44, "biomasse": 13222.88, "appreciation": "Bon",
+ "points": [{"day": 1, "biomass": 2.0, "rendement": 1.0},
+            {"day": 2, "biomass": 4.0, "rendement": 2.0}]}
 JSON
 exit 0

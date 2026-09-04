@@ -97,6 +97,10 @@ def test_season_simulation_data_driven_returns_rendement_and_appreciation(client
     assert body["rendement"] == 6611.44
     assert body["biomasse"] == 13222.88
     assert body["appreciation"] == "Bon"
+    assert body["points"] == [
+        {"day": 1, "biomass": 2.0, "rendement": 1.0},
+        {"day": 2, "biomass": 4.0, "rendement": 2.0},
+    ]
 
 
 def test_season_simulation_data_driven_requires_matching_lengths(client, monkeypatch):

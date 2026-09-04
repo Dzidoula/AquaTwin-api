@@ -341,6 +341,14 @@ def _season_engine_config() -> tuple[str, str]:
     return octave_cmd, script_path
 
 
+def _season_data_driven_engine_config() -> tuple[str, str]:
+    octave_cmd = os.environ.get("ENGINE_OCTAVE_CMD", "octave")
+    script_path = os.environ.get(
+        "SEASON_DATA_DRIVEN_SCRIPT_PATH", "run_season_prediction_data_driven.m"
+    )
+    return octave_cmd, script_path
+
+
 @app.post("/fields/{field_id}/season-simulation", response_model=schemas.SeasonSimulationOut)
 async def simulate_season(
     field_id: str,
@@ -361,6 +369,57 @@ async def simulate_season(
     return schemas.SeasonSimulationOut(
         points=[schemas.SeasonPointOut(**p) for p in result["points"]],
         final_rendement=result["final_rendement"],
+        appreciation=result["appreciation"],
+    )
+
+
+@app.post(
+    "/fields/{field_id}/season-simulation-data-driven",
+    response_model=schemas.SeasonSimulationDataDrivenOut,
+)
+async def simulate_season_data_driven(
+    field_id: str,
+    payload: schemas.SeasonSimulationDataDrivenIn,
+    current_user: models.UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Alex's data-driven yield model (rendementPredictionGood.m, ported to
+    run under Octave as PredictSeasonYieldDataDriven.m) — a second,
+    independent scenario-test model alongside the AquaCrop-FAO one behind
+    /season-simulation, for comparison in the Prévisions screen."""
+    field = _field_or_404(field_id, db)
+    _require_field_access(field, current_user)
+
+    if len(payload.jours_test) != len(payload.eto_test):
+        raise HTTPException(
+            status_code=422, detail="jours_test et eto_test doivent avoir la meme longueur."
+        )
+    if not payload.jours_test:
+        raise HTTPException(status_code=422, detail="Au moins un jour a tester est requis.")
+
+    octave_cmd, script_path = _season_data_driven_engine_config()
+    params = {
+        "lat": field.latitude,
+        "lon": field.longitude,
+        "culture": field.crop,
+        "date_semence": field.planting_date,
+        "jours_test": payload.jours_test,
+        "eto_test": payload.eto_test,
+    }
+    try:
+        result = await run_engine(
+            params,
+            octave_cmd=octave_cmd,
+            script_path=script_path,
+            lock=SEASON_LOCK,
+            timeout_s=300,
+        )
+    except EngineRunError as exc:
+        raise HTTPException(status_code=502, detail=exc.message)
+
+    return schemas.SeasonSimulationDataDrivenOut(
+        rendement=result["rendement"],
+        biomasse=result["biomasse"],
         appreciation=result["appreciation"],
     )
 

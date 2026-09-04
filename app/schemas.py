@@ -167,3 +167,17 @@ class SeasonSimulationOut(BaseModel):
     points: list[SeasonPointOut]
     final_rendement: float
     appreciation: str
+
+
+class SeasonSimulationDataDrivenIn(BaseModel):
+    # Jours du cycle de croissance a tester (ex. [6, 9, 12], comme les
+    # input() du script original d'Alex) et la valeur d'ETo (mm/jour) a
+    # tester pour chacun — meme longueur.
+    jours_test: list[int]
+    eto_test: list[float]
+
+
+class SeasonSimulationDataDrivenOut(BaseModel):
+    rendement: float
+    biomasse: float
+    appreciation: str

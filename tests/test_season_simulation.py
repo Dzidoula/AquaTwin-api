@@ -73,3 +73,66 @@ def test_season_simulation_surfaces_engine_failure(client, monkeypatch):
         json={"irrigation_coverage": 0.7},
     )
     assert resp.status_code == 502
+
+
+FAKE_OCTAVE_DATA_DRIVEN = os.path.join(
+    os.path.dirname(__file__), "fixtures", "fake_octave_season_data_driven.sh"
+)
+
+
+def test_season_simulation_data_driven_returns_rendement_and_appreciation(client, monkeypatch):
+    monkeypatch.setenv("ENGINE_OCTAVE_CMD", FAKE_OCTAVE_DATA_DRIVEN)
+    monkeypatch.setenv("SEASON_DATA_DRIVEN_SCRIPT_PATH", "unused-by-fake")
+
+    token = _login(client, phone="+22990000024")
+    field_id = _make_field(client, token)
+
+    resp = client.post(
+        f"/fields/{field_id}/season-simulation-data-driven",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"jours_test": [6, 9, 12], "eto_test": [4.0, 4.2, 3.8]},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["rendement"] == 6611.44
+    assert body["biomasse"] == 13222.88
+    assert body["appreciation"] == "Bon"
+
+
+def test_season_simulation_data_driven_requires_matching_lengths(client, monkeypatch):
+    monkeypatch.setenv("ENGINE_OCTAVE_CMD", FAKE_OCTAVE_DATA_DRIVEN)
+    monkeypatch.setenv("SEASON_DATA_DRIVEN_SCRIPT_PATH", "unused-by-fake")
+
+    token = _login(client, phone="+22990000025")
+    field_id = _make_field(client, token)
+
+    resp = client.post(
+        f"/fields/{field_id}/season-simulation-data-driven",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"jours_test": [6, 9], "eto_test": [4.0]},
+    )
+    assert resp.status_code == 422
+
+
+def test_season_simulation_data_driven_requires_auth(client):
+    resp = client.post(
+        "/fields/anything/season-simulation-data-driven",
+        json={"jours_test": [6], "eto_test": [4.0]},
+    )
+    assert resp.status_code == 401
+
+
+def test_season_simulation_data_driven_surfaces_engine_failure(client, monkeypatch):
+    failing_octave = os.path.join(os.path.dirname(__file__), "fixtures", "fake_octave_always_fails.sh")
+    monkeypatch.setenv("ENGINE_OCTAVE_CMD", failing_octave)
+    monkeypatch.setenv("SEASON_DATA_DRIVEN_SCRIPT_PATH", "unused-by-fake")
+
+    token = _login(client, phone="+22990000026")
+    field_id = _make_field(client, token)
+
+    resp = client.post(
+        f"/fields/{field_id}/season-simulation-data-driven",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"jours_test": [6], "eto_test": [4.0]},
+    )
+    assert resp.status_code == 502

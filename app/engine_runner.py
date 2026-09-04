@@ -21,6 +21,22 @@ class EngineRunError(Exception):
         self.message = message
 
 
+def _clean_engine_error(stderr_text: str) -> str:
+    """Octave's raw stderr is noisy for a farmer to read (an X11/GUI
+    warning banner, then a full call stack under "error: called from") —
+    extract just the actual error() message, which is the only part a
+    human needs. Falls back to a truncated raw dump if no `error: ` line
+    is found (an unexpected crash shape we haven't seen before)."""
+    messages = [
+        line[len("error: "):].strip()
+        for line in stderr_text.splitlines()
+        if line.startswith("error: ") and line.strip() != "error: called from"
+    ]
+    if messages:
+        return messages[-1]
+    return stderr_text.strip()[:300] or "Erreur inconnue du moteur."
+
+
 async def run_engine(
     params: dict,
     octave_cmd: str,
@@ -55,9 +71,12 @@ async def run_engine(
                 raise EngineRunError(f"Le calcul a depasse {timeout_s}s, arrete.")
 
         if process.returncode != 0:
-            raise EngineRunError(
-                f"Le moteur a echoue (code {process.returncode}): {stderr.decode(errors='replace')[:2000]}"
-            )
+            raw_stderr = stderr.decode(errors="replace")
+            # Full detail goes to the service log (journalctl) for
+            # debugging; only the clean, farmer-facing message is stored
+            # on the job and shown in the app.
+            print(f"[engine_runner] {script_path} failed (code {process.returncode}):\n{raw_stderr}", flush=True)
+            raise EngineRunError(f"Le moteur a echoue : {_clean_engine_error(raw_stderr)}")
 
         if not output_path.exists():
             raise EngineRunError("Le moteur n'a produit aucun resultat.")

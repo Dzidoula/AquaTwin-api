@@ -10,6 +10,7 @@ from app.engine_runner import run_engine, EngineRunError, ENGINE_LOCK, SEASON_LO
 
 FAKE_OCTAVE = os.path.join(os.path.dirname(__file__), "fixtures", "fake_octave.sh")
 FAKE_OCTAVE_ECHO_ENV = os.path.join(os.path.dirname(__file__), "fixtures", "fake_octave_echo_env.sh")
+FAKE_OCTAVE_NOISY_ERROR = os.path.join(os.path.dirname(__file__), "fixtures", "fake_octave_noisy_error.sh")
 
 
 @pytest.mark.asyncio
@@ -44,6 +45,21 @@ async def test_run_engine_raises_on_nonzero_exit():
             octave_cmd=FAKE_OCTAVE,
             script_path="unused-by-fake",
         )
+
+
+@pytest.mark.asyncio
+async def test_run_engine_strips_octave_noise_from_the_error_message():
+    with pytest.raises(EngineRunError) as exc_info:
+        await run_engine(
+            params={"culture": "mais", "lat": 20.0, "lon": 7.4},
+            octave_cmd=FAKE_OCTAVE_NOISY_ERROR,
+            script_path="unused-by-fake",
+        )
+    message = exc_info.value.message
+    assert "octave:" not in message
+    assert "called from" not in message
+    assert "SoilGrids_Rosetta" not in message
+    assert "Aucune donnee de sol disponible" in message
 
 
 @pytest.mark.asyncio

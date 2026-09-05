@@ -140,3 +140,7 @@ def test_recommendation_animation_is_served_when_present(client, monkeypatch):
     assert body["grid_res"] == 2
     assert len(body["frames"]) == 2
     assert body["r_emitter"] == 0.005
+    assert len(body["trace_debut"]["frames"]) == 2
+    assert body["trace_debut"]["frame_times_s"] == [0, 0.5]
+    assert len(body["trace_fin"]["frames"]) == 2
+    assert body["trace_fin"]["frame_times_s"] == [130.5, 131.0]

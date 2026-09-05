@@ -97,6 +97,22 @@ class RecommendationOut(BaseModel):
     pluie_48h_mm: float | None = None
 
 
+class TraceGridOut(BaseModel):
+    """Grille fixe de 12 images (Trace2D.m/Trace2DFin.m portes en
+    export_trace2d_frames.m/export_trace2dfin_frames.m) — meme forme que
+    AnimationFrameOut mais sans les series trend_*, qui n'ont de sens que
+    pour l'animation complete."""
+
+    r_max: float
+    z_max: float
+    r_emitter: float
+    theta_r: float
+    theta_s: float
+    grid_res: int
+    frame_times_s: list[float] = []
+    frames: list[list[list[float]]]
+
+
 class AnimationFrameOut(BaseModel):
     r_max: float
     z_max: float
@@ -118,6 +134,11 @@ class AnimationFrameOut(BaseModel):
     trend_theta_root: list[float] = []
     trend_stress_hydrique: list[float] = []
     trend_potentiel_hydrique: list[float] = []
+    # Grilles 12-images debut/fin d'irrigation (Trace2D.m/Trace2DFin.m,
+    # voir TraceGridOut) — absentes sur un resultat produit par un engine
+    # plus ancien.
+    trace_debut: TraceGridOut | None = None
+    trace_fin: TraceGridOut | None = None
 
 
 class HistoryPointOut(BaseModel):

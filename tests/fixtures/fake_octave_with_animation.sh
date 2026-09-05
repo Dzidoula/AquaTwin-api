@@ -13,6 +13,14 @@ cat > "$output_path" <<'JSON'
  "psi_old": [1.0, 2.0, 3.0], "theta_infiltre": 0.02, "jour_julien": 221,
  "animation": {"r_max": 0.5, "z_max": 0.8, "r_emitter": 0.005,
    "theta_r": 0.0114, "theta_s": 0.4717, "grid_res": 2,
-   "frames": [[[0.28, 0.29], [0.27, 0.30]], [[0.31, 0.32], [0.29, 0.33]]]}}
+   "frames": [[[0.28, 0.29], [0.27, 0.30]], [[0.31, 0.32], [0.29, 0.33]]],
+   "trace_debut": {"r_max": 0.5, "z_max": 0.8, "r_emitter": 0.005,
+     "theta_r": 0.0114, "theta_s": 0.4717, "grid_res": 2,
+     "frame_times_s": [0, 0.5],
+     "frames": [[[0.28, 0.29], [0.27, 0.30]], [[0.28, 0.29], [0.27, 0.30]]]},
+   "trace_fin": {"r_max": 0.5, "z_max": 0.8, "r_emitter": 0.005,
+     "theta_r": 0.0114, "theta_s": 0.4717, "grid_res": 2,
+     "frame_times_s": [130.5, 131.0],
+     "frames": [[[0.31, 0.32], [0.29, 0.33]], [[0.31, 0.32], [0.29, 0.33]]]}}}
 JSON
 exit 0
